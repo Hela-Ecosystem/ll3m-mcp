@@ -1,9 +1,15 @@
 # LL3M Agent (Monorepo)
 
+<!-- hela:version:start -->
+**MCP server:** `hela-plastid` · **Version:** `3.0.0` · **Canonical tools:** 15. [Current tool reference](docs/TOOLS.md).
+<!-- hela:version:end -->
+
 
 > **Part of the [HeLa MCP Ecosystem](https://github.com/Hela-Ecosystem/hela-mcp-ecosystem)** — This server is **HeLa Plastid (`hela-plastid`)** — the *3D Modeling* component of the HeLa cellular architecture. See the [ecosystem docs](https://github.com/Hela-Ecosystem/hela-mcp-ecosystem) for profiles, workflows, and multi-client setup.
 
 A unified autonomous 3D modeling system for Blender, built on the Model Context Protocol (MCP).
+
+The MCP server version above is independent of the Blender add-on and Python bridge versions. Their own manifests remain authoritative; the MCP version reset is not an upgrade from the previously advertised server 4.2.0, and it does not re-version bundled Blender API documentation.
 
 [![LL3M Agent Demo](https://img.youtube.com/vi/BnbDg1-be4g/0.jpg)](https://www.youtube.com/watch?v=BnbDg1-be4g)
 
