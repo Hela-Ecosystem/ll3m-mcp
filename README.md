@@ -124,3 +124,7 @@ Execute the modeling loop by providing a technical or descriptive request:
 > "Use the ll3m-mcp skill to generate a minimalist industrial interior with a glass-top table."
 
 The system will proceed through the PLAN → RETRIEVE → WRITE → EXECUTE cycle automatically.
+
+## License
+
+The original LL3M bridge code in this repository is distributed under the GNU GPL-3.0-or-later. Blender-derived components retain their upstream copyright and license notices; see the individual SPDX headers and manifests for those boundaries.
