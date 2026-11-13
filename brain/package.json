@@ -1,6 +1,6 @@
 {
   "name": "ll3m-mcp-server",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "LL3M Multi-Agent 3D Modeling Server",
   "license": "GPL-3.0-or-later",
   "main": "dist/index.js",
