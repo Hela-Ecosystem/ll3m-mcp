@@ -1,6 +1,6 @@
 {
   "name": "ll3m-mcp-server",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "LL3M Multi-Agent 3D Modeling Server",
   "license": "GPL-3.0-or-later",
   "main": "dist/index.js",
@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc && cp -r src/agents dist/ && cp src/*.py dist/",
     "test": "node --experimental-strip-types test/brain-envelope.test.mjs && node --experimental-strip-types test/brain-tools.test.mjs && node test/plastid-safety.test.mjs",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test:blender": "node scripts/verify-blender.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

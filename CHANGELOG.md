@@ -1,3 +1,11 @@
+## [3.0.3] - 2026-11-18
+
+### Added
+- `npm run test:blender` (brain) validates the bridge against a live Blender: scene summary, Python execution inside Blender, object visibility, object details, and the render call. Verified headless with Blender 5.3 and the add-on on `localhost:9876`.
+
+### Known limitation
+- `render_output` reports success with a filepath under Blender's temp directory but writes no file when Blender runs headless (`--background`). Rendering still needs a GUI instance; the check records the path instead of asserting a file.
+
 # Changelog
 
 All notable changes to this project.
