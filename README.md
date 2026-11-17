@@ -1,7 +1,7 @@
 # LL3M Agent (Monorepo)
 
 <!-- hela:version:start -->
-**MCP server:** `hela-plastid` · **Version:** `3.0.2` · **Canonical tools:** 15. [Current tool reference](docs/TOOLS.md).
+**MCP server:** `hela-plastid` · **Version:** `3.0.4` · **Canonical tools:** 15. [Current tool reference](docs/TOOLS.md).
 <!-- hela:version:end -->
 
 
