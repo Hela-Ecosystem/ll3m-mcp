@@ -1,3 +1,11 @@
+## [3.0.4] - 2026-11-18
+
+### Fixed
+- Brain ServerInfo version now comes from one `MCP_SERVER_VERSION` constant instead of a hardcoded literal, so a `package.json` bump can no longer leave the server reporting an old number.
+
+### Tests
+- Added `brain/test/version.test.mjs` (run first by `npm test`) asserting the constant equals `brain/package.json.version`; the existing brain-tools version check now verifies `index.ts` advertises the constant.
+
 ## [3.0.3] - 2026-11-18
 
 ### Added

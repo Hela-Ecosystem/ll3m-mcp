@@ -14,6 +14,7 @@ import {
   resolveRenderTool,
   resolveSummaryTool,
 } from '../src/tool-map.ts';
+import { MCP_SERVER_VERSION } from '../src/version.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BRAIN_DIR = path.join(__dirname, '..');
@@ -178,8 +179,9 @@ t('a clean build output carries the copied assets', () => {
 });
 
 t('package version is the version advertised by the MCP server', () => {
+  assert.equal(MCP_SERVER_VERSION, pkg.version, 'version constant drifted from package.json');
   const source = fs.readFileSync(path.join(BRAIN_DIR, 'src/index.ts'), 'utf8');
-  assert.ok(source.includes(`version: "${pkg.version}"`), `index.ts should report ${pkg.version}`);
+  assert.ok(source.includes('version: MCP_SERVER_VERSION'), 'index.ts should advertise MCP_SERVER_VERSION');
 });
 
 console.log(`\n${n} brain-tools tests passed.`);

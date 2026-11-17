@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { textResult } from "./envelope.js";
+import { MCP_SERVER_VERSION } from "./version.js";
 import {
   buildApiDocsArgv,
   buildFastFeedbackCode,
@@ -38,7 +39,7 @@ const BLENDER_PORT = 9876;
 const server = new Server(
   {
     name: "ll3m-agent-server",
-    version: "3.0.3",
+    version: MCP_SERVER_VERSION,
     description: "Recursive Staged Inverse Graphics LL3M Agent: Perfect Clone Loop",
   },
   {
