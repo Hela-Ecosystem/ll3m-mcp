@@ -5,6 +5,16 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { textResult } from "./envelope.js";
+import {
+  buildApiDocsArgv,
+  buildFastFeedbackCode,
+  buildSaveBlendCode,
+  buildToolCode,
+  resolveNavigationTool,
+  resolveRenderPath,
+  resolveRenderTool,
+  resolveSummaryTool,
+} from "./tool-map.js";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -28,7 +38,7 @@ const BLENDER_PORT = 9876;
 const server = new Server(
   {
     name: "ll3m-agent-server",
-    version: "3.0.1",
+    version: "3.0.2",
     description: "Recursive Staged Inverse Graphics LL3M Agent: Perfect Clone Loop",
   },
   {
@@ -99,25 +109,7 @@ async function runBodyTool(toolName: string, params: any = null): Promise<any> {
       code = code.replace(include[0], includeCode.trimEnd());
     }
     
-    const paramsJson = JSON.stringify(JSON.stringify(params));
-    code += `
-import json
-try:
-    params_dict = json.loads(${paramsJson})
-    if 'Params' in locals() or 'Params' in globals():
-        p = Params() if params_dict is None else Params(**params_dict)
-    else:
-        p = params_dict
-    _rv = main(p)
-    if callable(_rv):
-        check_is_finished = _rv
-        result = {}
-    else:
-        result = _rv._asdict() if hasattr(_rv, "_asdict") else _rv
-except Exception as e:
-    import traceback
-    result = {"status": "error", "message": str(e), "trace": traceback.format_exc()}
-`;
+    code = buildToolCode(code, params);
     return await sendToBlender(code, true);
 }
 
@@ -243,7 +235,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "get_api_docs":
       try {
-        const result = execFileSync(PYTHON_INTERPRETER, [API_BRIDGE_PATH, String(args?.identifier)], {
+        const argv = buildApiDocsArgv(PYTHON_INTERPRETER, API_BRIDGE_PATH, args?.identifier);
+        const result = execFileSync(argv[0], argv.slice(1), {
           encoding: "utf8",
           timeout: 30_000,
           maxBuffer: 4 * 1024 * 1024,
@@ -293,25 +286,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return textResult(name, JSON.stringify(objRes, null, 2) );
 
     case "get_blendfile_summary":
-        const summaryTools: Record<string, string> = {
-          datablocks: "get_blendfile_summary_datablocks",
-          missing_files: "get_blendfile_summary_missing_files",
-          linked_libraries: "get_blendfile_summary_of_linked_libraries",
-          path_info: "get_blendfile_summary_path_info",
-          usage_guess: "get_blendfile_summary_usage_guess",
-        };
-        const blendRes = await runBodyTool(summaryTools[String(args?.type)]);
+        const blendRes = await runBodyTool(resolveSummaryTool(args?.type));
         return textResult(name, JSON.stringify(blendRes, null, 2) );
 
     case "render_output":
-        const tool = args?.type === "viewport" ? "render_viewport_to_path" : "render_thumbnail_to_path";
-        const rendRes = await runBodyTool(tool, { output_path: args?.output_path || "render.png" });
+        const tool = resolveRenderTool(args?.type);
+        const rendRes = await runBodyTool(tool, { output_path: resolveRenderPath(args?.output_path) });
         return textResult(name, JSON.stringify(rendRes, null, 2) );
 
     case "save_blend":
-        const copyFlag = args?.as_copy ? ", copy=True" : "";
-        const filepath = JSON.stringify(String(args?.filepath));
-        const saveCode = `import bpy; bpy.ops.wm.save_as_mainfile(filepath=${filepath}${copyFlag})\nresult={"status":"saved"}`;
+        const saveCode = buildSaveBlendCode(args?.filepath, args?.as_copy);
         const saveRes = await sendToBlender(saveCode, true);
         return textResult(name, JSON.stringify(saveRes, null, 2) );
 
@@ -320,19 +304,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return textResult(name, JSON.stringify(screenRes, null, 2) );
 
     case "get_fast_feedback":
-        const fastPath = JSON.stringify(String(args?.output_path || "critic_feedback.png"));
-        const scale = Math.min(100, Math.max(1, Number(args?.resolution_scale) || 30));
         const fastRes = await sendToBlender(
-          `result = helpers.get_fast_feedback(${fastPath}, resolution_scale=${scale})`,
+          buildFastFeedbackCode(args?.output_path, args?.resolution_scale),
           true,
         );
         return textResult(name, JSON.stringify(fastRes, null, 2) );
 
     case "navigation":
-        let navTool = "";
-        if (args?.action === "jump_to_tab") navTool = "jump_to_tab_by_name";
-        else if (args?.action === "focus_object") navTool = "jump_to_view3d_object_by_name";
-        else navTool = "jump_to_view3d_object_data_by_name";
+        const navTool = resolveNavigationTool(args?.action);
         const navRes = await runBodyTool(navTool, { name: args?.name });
         return textResult(name, JSON.stringify(navRes, null, 2) );
 

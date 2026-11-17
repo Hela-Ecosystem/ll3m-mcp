@@ -38,3 +38,5 @@ jobs:
           python-version: "3.12"
       - name: Compile Python sources
         run: python -m compileall -q body/mcp body/addon body/chat_client
+      - name: Run Blender socket bridge unit tests
+        run: python -m unittest body.tests.test_addon_server

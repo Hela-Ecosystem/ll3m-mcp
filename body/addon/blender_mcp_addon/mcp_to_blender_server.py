@@ -14,6 +14,7 @@ Blender's main thread.
 __all__ = (
     "DEFAULT_HOST",
     "DEFAULT_PORT",
+    "MAX_INCOMPLETE_CLIENTS",
     "TIMER_INTERVAL_ACTIVE",
     "is_running",
     "poll",
@@ -33,6 +34,7 @@ import math
 import select
 import socket
 import sys
+import time
 import traceback
 from collections.abc import Callable
 from typing import NamedTuple, cast
@@ -61,7 +63,6 @@ class _TimerState:
         "interval_idle_delay",
         "idle_countdown_reset",
         "idle_countdown",
-        "client_timeout_countdown",
     )
 
     def __init__(self) -> None:
@@ -72,8 +73,6 @@ class _TimerState:
         self.idle_countdown_reset: int = 0
         # Current countdown. When zero, `timer_idle_interval` returns idle.
         self.idle_countdown: int = 0
-        # Poll ticks before an idle client is evicted.
-        self.client_timeout_countdown: int = 2
 
 
 _timer = _TimerState()
@@ -100,7 +99,6 @@ def timer_internal_vars_calc(
     # Round up so the delay is never shorter than requested.
     _timer.idle_countdown_reset = math.ceil(_timer.interval_idle_delay / _timer.interval_active)
     _timer.idle_countdown = _timer.idle_countdown_reset
-    _timer.client_timeout_countdown = max(2, math.ceil(_CLIENT_TIMEOUT / _timer.interval_active))
 
 
 def timer_idle_reset() -> None:
@@ -129,9 +127,16 @@ use_log: bool = False
 _MAX_REQUEST_BYTES = 10 * 1024 * 1024  # 10 MiB.
 # Maximum number of queued incoming connections.
 _LISTEN_BACKLOG = 5
+# Maximum number of connected clients that have not yet sent a complete request.
+# Connections beyond this limit are answered with an error and closed so a
+# misbehaving peer cannot grow the client list without bound.
+# Hosts may lower this at runtime (``mcp_to_blender_server.MAX_INCOMPLETE_CLIENTS = 8``).
+MAX_INCOMPLETE_CLIENTS = 64
 _RECV_BUFFER_SIZE = 4096
 # Seconds before a client that has not sent a complete request is closed.
 _CLIENT_TIMEOUT = 10.0
+# Seconds a queued response may take to drain before the connection is closed.
+_WRITE_TIMEOUT = _CLIENT_TIMEOUT
 # How often `poll_blocking` checks for shutdown.
 _POLL_BLOCKING_TIMEOUT = 1.0
 _DEFERRED_UNSUPPORTED_MESSAGE = (
@@ -148,21 +153,30 @@ timer_internal_vars_calc()
 
 class _Client:
     """
-    Per-connection state for a client (the MCP server process) that has not yet sent a complete request.
+    Per-connection state for a client (the MCP server process).
+
+    A client is either assembling a request (``buffer``) or draining a
+    queued response (``pending``).
     """
 
     __slots__ = (
         "conn",
         "buffer",
-        "timeout",
+        "deadline",
+        "pending",
+        "close_when_drained",
     )
 
     def __init__(self, conn: socket.socket) -> None:
         self.conn: socket.socket = conn
         # Accumulates data until the null-byte delimiter is received.
         self.buffer: bytearray = bytearray()
-        # Poll ticks remaining before this client is evicted.
-        self.timeout: int = _timer.client_timeout_countdown
+        # Monotonic deadline for the current phase (read or write).
+        self.deadline: float = time.monotonic() + _CLIENT_TIMEOUT
+        # Response bytes waiting to be written by a non-blocking socket.
+        self.pending: bytearray = bytearray()
+        # Close the connection once `pending` has been written.
+        self.close_when_drained: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -354,24 +368,94 @@ def _close_client(client: _Client) -> None:
         pass
 
 
+def _queue_response(client: _Client, response: dict[str, object]) -> None:
+    """
+    Queue a null-byte-delimited JSON response for non-blocking delivery.
+    """
+    client.pending.extend(_encode_response(response))
+
+
+def _queue_response_and_close(client: _Client, response: dict[str, object]) -> None:
+    """
+    Queue a final response and close the connection once it has been written.
+    """
+    _queue_response(client, response)
+    client.close_when_drained = True
+    # Bound the time spent waiting for a peer that does not read.
+    client.deadline = time.monotonic() + _WRITE_TIMEOUT
+
+
+def _flush_client(client: _Client) -> bool:
+    """
+    Write as much of the queued response as the socket accepts.
+
+    Return ``False`` if the connection failed, ``True`` otherwise
+    (including when data remains queued for a later poll).
+    """
+    while client.pending:
+        try:
+            sent = client.conn.send(client.pending)
+        except BlockingIOError:
+            # Send buffer is full, retry when the socket is writable.
+            return True
+        except OSError:
+            return False
+        if sent <= 0:
+            return False
+        del client.pending[:sent]
+    return True
+
+
+def _poll_writable(conn: socket.socket) -> bool:
+    """
+    Return whether *conn* can be written to without blocking.
+    """
+    try:
+        _readable, writable, _errored = select.select([], [conn], [], 0)
+    except (OSError, ValueError):
+        return False
+    return bool(writable)
+
+
+def _reject_client(conn: socket.socket) -> None:
+    """
+    Best-effort refusal of a connection that exceeds the incomplete-client cap.
+    """
+    try:
+        conn.send(_encode_response({
+            "status": "error",
+            "message": "Too many pending clients (maximum {:d})".format(MAX_INCOMPLETE_CLIENTS),
+        }))
+    except OSError:
+        pass
+    finally:
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Polling (called from the execution modules).
 
 def _accept_clients() -> None:
     """
-    Accept all pending connections on the listening socket.
+    Accept pending connections, up to ``MAX_INCOMPLETE_CLIENTS``.
     """
     if _state.sock is None:
         return
     while True:
         try:
             conn, _addr = _state.sock.accept()
-            conn.setblocking(False)
-            _state.clients.append(_Client(conn))
         except BlockingIOError:
             break
         except OSError:
             break
+        conn.setblocking(False)
+        if len(_state.clients) >= MAX_INCOMPLETE_CLIENTS:
+            _reject_client(conn)
+            continue
+        _state.clients.append(_Client(conn))
 
 
 def _service_clients() -> bool:
@@ -383,18 +467,26 @@ def _service_clients() -> bool:
     did_work = False
     # Iterate over a copy since clients may be removed during the loop.
     for client in _state.clients[:]:
+        if client.pending:
+            # A response is queued: wait for writability and drain it.
+            if time.monotonic() >= client.deadline:
+                _close_client(client)
+                continue
+            if not _poll_writable(client.conn):
+                continue
+            if not _flush_client(client):
+                _close_client(client)
+                continue
+            if client.close_when_drained and not client.pending:
+                _close_client(client)
+            continue
+
         # Evict clients that have not sent a complete request in time.
-        client.timeout -= 1
-        if client.timeout <= 0:
-            try:
-                err: dict[str, object] = {
-                    "status": "error",
-                    "message": "Client timed out",
-                }
-                client.conn.sendall(_encode_response(err))
-            except OSError:
-                pass
-            _close_client(client)
+        if time.monotonic() >= client.deadline:
+            _queue_response_and_close(client, {
+                "status": "error",
+                "message": "Client timed out",
+            })
             continue
 
         try:
@@ -415,15 +507,11 @@ def _service_clients() -> bool:
 
         # Guard against unbounded input from a misbehaving client.
         if len(client.buffer) > _MAX_REQUEST_BYTES:
-            try:
-                err = {
-                    "status": "error",
-                    "message": "Request exceeds {:d} byte limit".format(_MAX_REQUEST_BYTES),
-                }
-                client.conn.sendall(_encode_response(err))
-            except OSError:
-                pass
-            _close_client(client)
+            client.buffer.clear()
+            _queue_response_and_close(client, {
+                "status": "error",
+                "message": "Request exceeds {:d} byte limit".format(_MAX_REQUEST_BYTES),
+            })
             continue
 
         if b"\0" not in client.buffer:
@@ -454,11 +542,9 @@ def _service_clients() -> bool:
             except ValueError:
                 pass
         else:
-            try:
-                client.conn.sendall(_encode_response(exec_result.response))
-            except OSError:
-                pass
-            _close_client(client)
+            # Queue the response; it is drained on this or a later poll.
+            client.buffer.clear()
+            _queue_response_and_close(client, exec_result.response)
         did_work = True
 
     return did_work

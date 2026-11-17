@@ -26,11 +26,11 @@ Prioritized from a repository-wide review on 2026-07-26. Items marked complete m
 
 - [x] Reject malformed OpenAI tool arguments instead of invoking tools with `{}` (`body/chat_client/chat_client.py`).
 - [x] Parse quoted `--server-command` values with `shlex.split` and reject empty commands (`body/chat_client/chat_client.py`).
-- [ ] Replace tick-based incomplete-client expiration with monotonic deadlines (`body/addon/blender_mcp_addon/mcp_to_blender_server.py`).
-- [ ] Cap concurrent incomplete Blender socket clients (`body/addon/blender_mcp_addon/mcp_to_blender_server.py`).
-- [ ] Implement buffered writes for non-blocking Blender client sockets; current `sendall()` can truncate under backpressure (`body/addon/blender_mcp_addon/mcp_to_blender_server.py`).
+- [x] Replace tick-based incomplete-client expiration with monotonic deadlines (`body/addon/blender_mcp_addon/mcp_to_blender_server.py`).
+- [x] Cap concurrent incomplete Blender socket clients (`body/addon/blender_mcp_addon/mcp_to_blender_server.py`).
+- [x] Implement buffered writes for non-blocking Blender client sockets; current `sendall()` can truncate under backpressure (`body/addon/blender_mcp_addon/mcp_to_blender_server.py`).
 - [x] Replace the writer prompt's undefined `mesh_data`/`obj` example with runnable code (`brain/src/agents/prompts/writer.md`).
-- [ ] Add Brain unit tests for tool mappings, source generation, subprocess argument safety, and clean-build assets.
+- [x] Add Brain unit tests for tool mappings, source generation, subprocess argument safety, and clean-build assets.
 
 ## Existing User Work Requiring Follow-up
 
