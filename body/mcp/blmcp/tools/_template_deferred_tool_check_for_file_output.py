@@ -33,8 +33,11 @@ def _deferred_tool_check_for_file_output(
         if restore_attrs is not None:
             for obj, attr, value in restore_attrs:
                 setattr(obj, attr, value)
-        if os.path.exists(output_path):
+        if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
             return {"status": "ok", "filepath": output_path}
-        return {"status": "error", "message": "Job completed but output file was not created"}
+        return {
+            "status": "error",
+            "message": "Render output was not created or is empty. Rendering needs a GUI Blender session.",
+        }
 
     return check_is_finished

@@ -44,6 +44,11 @@ def main(params: Params) -> Result | Callable[[], dict[str, object] | None]:
 
     # Resolve the output path inside the MCP scratch directory.
     output_path = os.path.join(bpy.app.tempdir, "blender_mcp", os.path.basename(params.output_path))
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    try:
+        os.remove(output_path)
+    except FileNotFoundError:
+        pass
 
     scene = bpy.context.scene
 
@@ -68,4 +73,9 @@ def main(params: Params) -> Result | Callable[[], dict[str, object] | None]:
         )
 
     rd.filepath = orig_filepath
+    if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
+        return Result(
+            status="error",
+            message="Render output was not created or is empty. Rendering needs a GUI Blender session.",
+        )
     return Result(status="ok", filepath=output_path)

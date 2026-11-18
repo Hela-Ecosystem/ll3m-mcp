@@ -293,6 +293,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "render_output":
         const tool = resolveRenderTool(args?.type);
         const rendRes = await runBodyTool(tool, { output_path: resolveRenderPath(args?.output_path) });
+        if (rendRes?.status === "error") {
+          return {
+            isError: true,
+            content: [{ type: "text", text: JSON.stringify(rendRes, null, 2) }],
+          };
+        }
         return textResult(name, JSON.stringify(rendRes, null, 2) );
 
     case "save_blend":

@@ -57,10 +57,17 @@ try {
 
   const render = await call('render_output', { type: 'thumbnail', output_path: '/tmp/hela-render-check.png' });
   const renderedPath = (render.text.match(/"filepath":\s*"([^"]+)"/) ?? [])[1] ?? '';
-  const exists = renderedPath ? (await import('node:fs')).existsSync(renderedPath) : false;
-  // Known limitation: in headless background mode the addon reports a path under
-  // Blender's temp directory but writes no file. Recorded, not asserted as a pass.
-  report('render output reports a path (file not written headless)', !render.isError && Boolean(renderedPath), `${renderedPath} (exists: ${exists})`);
+  const fs = await import('node:fs');
+  const exists = renderedPath ? fs.existsSync(renderedPath) : false;
+  const renderResult = (() => {
+    try { return JSON.parse(render.text); } catch { return null; }
+  })();
+  if (exists) {
+    const nonEmpty = fs.statSync(renderedPath).size > 0;
+    report('render output writes a non-empty file', !render.isError && renderResult?.status === 'ok' && nonEmpty, `${renderedPath} (non-empty: ${nonEmpty})`);
+  } else {
+    report('headless render reports GUI requirement', render.isError && renderResult?.status === 'error' && /GUI Blender session/i.test(renderResult?.message ?? ''), render.text.slice(0, 140).replace(/\n/g, ' '));
+  }
 } finally {
   await client.close().catch(() => {});
 }

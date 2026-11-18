@@ -184,4 +184,20 @@ t('package version is the version advertised by the MCP server', () => {
   assert.ok(source.includes('version: MCP_SERVER_VERSION'), 'index.ts should advertise MCP_SERVER_VERSION');
 });
 
+t('render paths return an MCP error when Blender reports a missing output', () => {
+  const source = fs.readFileSync(path.join(BRAIN_DIR, 'src/index.ts'), 'utf8');
+  assert.match(source, /if \(rendRes\?\.status === "error"\)/);
+  assert.match(source, /isError: true/);
+  for (const file of [
+    path.join(BRAIN_DIR, '../body/mcp/blmcp/tools/render_thumbnail_to_path_toolcode.py'),
+    path.join(BRAIN_DIR, '../body/mcp/blmcp/tools/render_viewport_to_path_toolcode.py'),
+    path.join(BRAIN_DIR, '../body/mcp/blmcp/tools/_template_deferred_tool_check_for_file_output.py'),
+  ]) {
+    const body = fs.readFileSync(file, 'utf8');
+    assert.match(body, /os\.path\.isfile\(output_path\)/, file);
+    assert.match(body, /os\.path\.getsize\(output_path\) > 0|os\.path\.getsize\(output_path\) == 0/, file);
+    assert.match(body, /GUI Blender session/, file);
+  }
+});
+
 console.log(`\n${n} brain-tools tests passed.`);

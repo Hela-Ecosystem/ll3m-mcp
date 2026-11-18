@@ -1,3 +1,8 @@
+## [3.0.5] - 2026-11-19
+
+### Fixed
+- `render_output` reports an error when Blender does not create a non-empty render file. Headless failures explain that rendering needs a GUI Blender session; GUI rendering remains supported.
+
 ## [3.0.4] - 2026-11-18
 
 ### Fixed
@@ -12,7 +17,7 @@
 - `npm run test:blender` (brain) validates the bridge against a live Blender: scene summary, Python execution inside Blender, object visibility, object details, and the render call. Verified headless with Blender 5.3 and the add-on on `localhost:9876`.
 
 ### Known limitation
-- `render_output` reports success with a filepath under Blender's temp directory but writes no file when Blender runs headless (`--background`). Rendering still needs a GUI instance; the check records the path instead of asserting a file.
+- Rendering still needs a GUI Blender session. Headless render requests now return an error instead of a success path when the output file is missing or empty.
 
 # Changelog
 
